@@ -1,0 +1,42 @@
+# bytecode & caches
+__pycache__/
+*.py[cod]
+*.pyo
+
+# envs
+.env
+.venv
+venv/
+ENV/
+.conda/
+.ipynb_checkpoints/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# build/dist
+build/
+dist/
+*.egg-info/
+
+# data & artifacts
+data/
+checkpoints/
+reports/figures/
+reports/cams/
+logs/
+runs/
+wandb/
+input/
+notebooks/reports
+reports
+saved_checkpoints/
+
+# notebooks temp
+*.checkpoint.ipynb
+
+# configs with secrets (if any)
+*.secret.*

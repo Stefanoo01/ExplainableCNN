@@ -1,0 +1,25 @@
+dataset: fashion-mnist
+model_name: smallcnn
+data_dir: ./data
+
+batch_size: 128
+epochs: 8
+lr: 0.001
+weight_decay: 0.0001
+num_workers: 2
+seed: 41
+device: auto
+
+img_size: 28
+mean: [0.2860]
+std:  [0.3530]
+
+log_root: runs
+ckpt_root: checkpoints
+reports_root: reports
+
+early_stop:
+  monitor: val_loss
+  mode: min
+  patience: 3
+  min_delta: 0.0

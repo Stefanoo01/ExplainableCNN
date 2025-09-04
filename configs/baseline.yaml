@@ -1,0 +1,20 @@
+dataset: fashion-mnist
+data_dir: ./data
+
+batch_size: 128
+epochs: 8
+lr: 0.001
+weight_decay: 0.0001
+num_workers: 2
+seed: 41
+device: auto
+
+log_root: runs
+ckpt_root: checkpoints
+reports_root: reports
+
+early_stop:
+  monitor: val_loss    # val_loss or val_acc
+  mode: min            # min for loss, max for acc
+  patience: 3
+  min_delta: 0.0
