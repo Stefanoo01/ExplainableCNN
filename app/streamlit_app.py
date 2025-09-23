@@ -248,79 +248,76 @@ st.title("🔍 Grad-CAM Demo — upload an image, get top-k + heatmaps")
 with st.sidebar:
     st.header("Settings")
 
-    ckpt_root = "saved_checkpoints"
-    if st.button("Refresh list", use_container_width=True):
-        st.cache_data.clear()
-
+    source = st.radio("Checkpoint source", ["Local folder", "Remote URL/Presets"], index=0)
     show_best_only = st.checkbox("Only show best.ckpt", value=False)
     filter = "best" if show_best_only else ""
 
-    labels, paths = list_ckpts(ckpt_root, recursive=True, filter=filter)
+    ckpt_path = None
 
-    if not paths:
-        st.warning(f"No matching checkpoints found under: {ckpt_root}")
-        no_paths = True
-
-    if not no_paths:
-        sel_label = st.selectbox("Select a checkpoint", options=labels, index=0)
-        ckpt_path = paths[labels.index(sel_label)]
+    if source == "Local folder":
+        ckpt_root = st.text_input("Checkpoint folder", value="saved_checkpoints")
+        if st.button("Refresh list", use_container_width=True):
+            st.cache_data.clear()
+        labels, paths = list_ckpts(ckpt_root, recursive=True, filter=filter)
+        if not paths:
+            st.warning(f"No matching checkpoints found under: {ckpt_root}")
+        else:
+            sel_label = st.selectbox("Select a checkpoint", options=labels, index=0)
+            ckpt_path = paths[labels.index(sel_label)]
     else:
-        ckpt_path = None
+        st.subheader("Remote checkpoints (GitHub Releases)")
+        dest_dir = st.text_input("Download to folder", value="saved_checkpoints")
+
+        def download_release_asset(url: str, dest_dir: str = "saved_checkpoints") -> str:
+            Path(dest_dir).mkdir(parents=True, exist_ok=True)
+            url_hash = hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
+            fname = Path(url).name or f"asset_{url_hash}.ckpt"
+            if not fname.endswith(".ckpt"):
+                fname = f"{fname}.ckpt"
+            local_path = Path(dest_dir) / f"{url_hash}_{fname}"
+            if local_path.exists() and local_path.stat().st_size > 0:
+                return str(local_path)
+            with requests.get(url, stream=True, timeout=120) as r:
+                r.raise_for_status()
+                with open(local_path, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=1024 * 1024):
+                        if chunk:
+                            f.write(chunk)
+            return str(local_path)
+
+        presets = st.secrets.get("release_checkpoints", {}) if hasattr(st, "secrets") else {}
+        preset_names = list(presets.keys())
+        preset_sel = st.selectbox("Preset release asset", options=["(none)"] + preset_names, index=0) if preset_names else "(none)"
+        url_input = st.text_input("Or paste asset URL", value="")
+        if st.button("Download checkpoint", use_container_width=True):
+            url = presets.get(preset_sel, "") if preset_sel != "(none)" else url_input.strip()
+            if not url:
+                st.warning("Provide a preset or paste a URL")
+            else:
+                try:
+                    path_dl = download_release_asset(url, dest_dir=dest_dir)
+                    st.success(f"Downloaded to: {path_dl}")
+                    ckpt_path = path_dl
+                    st.cache_data.clear()
+                except Exception as e:
+                    st.error(f"Download failed: {e}")
 
     st.caption(f"Selected: {ckpt_path}")
 
-    st.markdown("---")
-    st.subheader("Remote checkpoints (GitHub Releases)")
-
-    def download_release_asset(url: str, dest_dir: str = "saved_checkpoints") -> str:
-        Path(dest_dir).mkdir(parents=True, exist_ok=True)
-        url_hash = hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
-        fname = Path(url).name or f"asset_{url_hash}.ckpt"
-        if not fname.endswith(".ckpt"):
-            fname = f"{fname}.ckpt"
-        local_path = Path(dest_dir) / f"{url_hash}_{fname}"
-        if local_path.exists() and local_path.stat().st_size > 0:
-            return str(local_path)
-        with requests.get(url, stream=True, timeout=120) as r:
-            r.raise_for_status()
-            with open(local_path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=1024 * 1024):
-                    if chunk:
-                        f.write(chunk)
-        return str(local_path)
-
-    # Optional: presets from Streamlit secrets (maintain them in Cloud)
-    presets = st.secrets.get("release_checkpoints", {}) if hasattr(st, "secrets") else {}
-    preset_names = list(presets.keys())
-    if preset_names:
-        preset_sel = st.selectbox("Preset release asset", options=["(none)"] + preset_names, index=0)
-    else:
-        preset_sel = "(none)"
-    url_input = st.text_input("Or paste asset URL", value="")
-    if st.button("Download remote checkpoint", use_container_width=True):
-        url = presets.get(preset_sel, "") if preset_sel != "(none)" else url_input.strip()
-        if not url:
-            st.warning("Provide a preset or paste a URL")
-        else:
-            try:
-                path_dl = download_release_asset(url)
-                st.success(f"Downloaded to: {path_dl}")
-                # Refresh local list after download
-                st.cache_data.clear()
-            except Exception as e:
-                st.error(f"Download failed: {e}")
-
     with st.expander("Checkpoint meta preview", expanded=False):
         try:
-            m, c, meta_preview = load_model_from_ckpt(Path(ckpt_path), device="cpu")
-            st.json(
-                {
-                    "dataset": meta_preview.get("dataset"),
-                    "model_name": meta_preview.get("model_name"),
-                    "img_size": meta_preview.get("img_size"),
-                    "target_layer": meta_preview.get("default_target_layer"),
-                }
-            )
+            if ckpt_path:
+                m, c, meta_preview = load_model_from_ckpt(Path(ckpt_path), device="cpu")
+                st.json(
+                    {
+                        "dataset": meta_preview.get("dataset"),
+                        "model_name": meta_preview.get("model_name"),
+                        "img_size": meta_preview.get("img_size"),
+                        "target_layer": meta_preview.get("default_target_layer"),
+                    }
+                )
+            else:
+                st.info("No checkpoint selected yet.")
         except Exception as e:
             st.info(f"Could not read meta: {e}")
 
@@ -333,7 +330,7 @@ with st.sidebar:
 
 # Load model/meta
 if not ckpt_path or not Path(ckpt_path).exists():
-    st.warning("Select a valid checkpoint (best.ckpt).")
+    st.info("Select a local checkpoint or download one from GitHub Releases above.")
     st.stop()
 
 device = get_device(device_choice)
