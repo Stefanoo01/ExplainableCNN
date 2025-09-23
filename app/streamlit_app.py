@@ -259,7 +259,6 @@ with st.sidebar:
 
     if not paths:
         st.warning(f"No matching checkpoints found under: {ckpt_root}")
-        st.stop()
 
     sel_label = st.selectbox("Select a checkpoint", options=labels, index=0)
     ckpt_path = paths[labels.index(sel_label)]
