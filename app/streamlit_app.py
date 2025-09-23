@@ -386,7 +386,13 @@ with st.sidebar:
 
 # Load model/meta
 if not ckpt_path or not Path(ckpt_path).exists():
-    st.info("Select a local checkpoint or download one from GitHub Releases above.")
+    st.info(
+        "First choose a checkpoint:\n"
+        "- Preset: pick from the list and click 'Download checkpoint'\n"
+        "- URL: paste a direct .ckpt URL and click 'Download checkpoint'\n"
+        "- Upload: select a .ckpt and click 'Use uploaded checkpoint'\n\n"
+        "After a checkpoint is selected, upload an image or use the sample picker to see predictions and Grad-CAM overlays."
+    )
     st.stop()
 
 device = get_device(device_choice)

@@ -1,0 +1,19 @@
+# GPU build (install torch/torchvision/torchaudio separately per https://pytorch.org/get-started/locally/)
+# Example (CUDA 12.1):
+#   pip install --index-url https://download.pytorch.org/whl/cu121 torch torchvision torchaudio
+
+# Core libs (do NOT pin torch* here; users install matching CUDA builds first)
+torchmetrics
+torchcam
+captum
+lightning
+albumentations
+opencv-python-headless
+matplotlib
+seaborn
+tensorboard
+rich
+PyYAML
+streamlit
+requests
+

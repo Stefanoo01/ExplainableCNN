@@ -24,7 +24,7 @@ from torchvision.datasets import ImageFolder
 def build_argparser():
     p = argparse.ArgumentParser(description="Train a small CNN on MNIST/Fashion-MNIST")
     p.add_argument(
-        "--dataset", choices=["fashion-mnist", "mnist", "cifar10","eurosat"], default="fashion-mnist"
+        "--dataset", choices=["fashion-mnist", "mnist", "cifar10"], default="fashion-mnist"
     )
     p.add_argument("--data-dir", type=str, default="./data")
     p.add_argument("--batch-size", type=int, default=128)
@@ -201,18 +201,7 @@ def get_transforms_for(dataset_name: str, img_size: int, mean, std, train: bool)
         tfms += [transforms.ToTensor(), transforms.Normalize(mean, std)]
         return transforms.Compose(tfms)
     
-    if dataset_name == "eurosat":
-        # Work at 224px (standard backbones) + light aug for train
-        if train:
-            tfms += [
-                transforms.Resize((img_size, img_size)),
-                transforms.RandomHorizontalFlip(),
-                transforms.RandomApply([transforms.ColorJitter(0.2, 0.2, 0.2, 0.1)], p=0.3),
-            ]
-        else:
-            tfms += [transforms.Resize((img_size, img_size))]
-        tfms += [transforms.ToTensor(), transforms.Normalize(mean, std)]
-        return transforms.Compose(tfms)
+    
 
     # fashion-mnist / mnist (grayscale)
     # fashion-mnist / mnist (grayscale)
@@ -270,20 +259,7 @@ def get_dataloaders(
         classes = train_ds.classes
         return train_loader, val_loader, test_loader, classes
 
-    elif dataset_name == "eurosat":
-        # Expect prepared split at: data/eurosat_custom/{train,val,test}/{class}/*.jpg
-        train_tf = get_transforms_for("eurosat", img_size, mean, std, train=True)
-        eval_tf  = get_transforms_for("eurosat", img_size, mean, std, train=False)
-
-        train_ds = ImageFolder(root / "eurosat_custom" / "train", transform=train_tf)
-        val_ds   = ImageFolder(root / "eurosat_custom" / "val",   transform=eval_tf)
-        test_ds  = ImageFolder(root / "eurosat_custom" / "test",  transform=eval_tf)
-
-        train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  num_workers=num_workers, generator=g)
-        val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, num_workers=num_workers)
-        test_loader  = DataLoader(test_ds,  batch_size=batch_size, shuffle=False, num_workers=num_workers)
-        classes = train_ds.classes
-        return train_loader, val_loader, test_loader, classes
+    
 
     else:
         raise ValueError(f"Unsupported dataset: {dataset_name}")
@@ -429,11 +405,7 @@ def main():
     if dataset == "cifar10" and (mean is None or std is None):
         mean, std = [0.4914, 0.4822, 0.4465], [0.2470, 0.2435, 0.2616]
 
-    # defaults for eurosat (we use ImageNet stats at 224px)
-    if dataset == "eurosat":
-        img_size = int(cfg.get("img_size", 224))
-        if mean is None or std is None:
-            mean, std = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
+    
 
     device = get_device(cfg["device"])
     print("device:", device)
@@ -461,15 +433,7 @@ def main():
         std,
         )
 
-    if dataset == "eurosat":
-        # ImageFolder exposes .samples -> list of (path, label)
-        targets = np.array([y for _, y in train_loader.dataset.samples])
-        class_counts = np.bincount(targets, minlength=len(classes))
-        class_weights = (class_counts.sum() / (len(classes) * class_counts))
-        class_weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
-        loss_fn = nn.CrossEntropyLoss(weight=class_weights)
-    else:
-        loss_fn = nn.CrossEntropyLoss()
+    loss_fn = nn.CrossEntropyLoss()
 
     model, default_target_layer = build_model(
         model_name, num_classes=len(classes), img_size=img_size
