@@ -17,3 +17,4 @@ tensorboard
 rich
 PyYAML
 streamlit
+requests

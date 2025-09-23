@@ -1,6 +1,9 @@
 import datetime as dt
 import random
 from pathlib import Path
+import os
+import hashlib
+import requests
 
 import numpy as np
 import streamlit as st
@@ -261,6 +264,47 @@ with st.sidebar:
     sel_label = st.selectbox("Select a checkpoint", options=labels, index=0)
     ckpt_path = paths[labels.index(sel_label)]
     st.caption(f"Selected: {ckpt_path}")
+
+    st.markdown("---")
+    st.subheader("Remote checkpoints (GitHub Releases)")
+
+    def download_release_asset(url: str, dest_dir: str = "saved_checkpoints") -> str:
+        Path(dest_dir).mkdir(parents=True, exist_ok=True)
+        url_hash = hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
+        fname = Path(url).name or f"asset_{url_hash}.ckpt"
+        if not fname.endswith(".ckpt"):
+            fname = f"{fname}.ckpt"
+        local_path = Path(dest_dir) / f"{url_hash}_{fname}"
+        if local_path.exists() and local_path.stat().st_size > 0:
+            return str(local_path)
+        with requests.get(url, stream=True, timeout=120) as r:
+            r.raise_for_status()
+            with open(local_path, "wb") as f:
+                for chunk in r.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        f.write(chunk)
+        return str(local_path)
+
+    # Optional: presets from Streamlit secrets (maintain them in Cloud)
+    presets = st.secrets.get("release_checkpoints", {}) if hasattr(st, "secrets") else {}
+    preset_names = list(presets.keys())
+    if preset_names:
+        preset_sel = st.selectbox("Preset release asset", options=["(none)"] + preset_names, index=0)
+    else:
+        preset_sel = "(none)"
+    url_input = st.text_input("Or paste asset URL", value="")
+    if st.button("Download remote checkpoint", use_container_width=True):
+        url = presets.get(preset_sel, "") if preset_sel != "(none)" else url_input.strip()
+        if not url:
+            st.warning("Provide a preset or paste a URL")
+        else:
+            try:
+                path_dl = download_release_asset(url)
+                st.success(f"Downloaded to: {path_dl}")
+                # Refresh local list after download
+                st.cache_data.clear()
+            except Exception as e:
+                st.error(f"Download failed: {e}")
 
     with st.expander("Checkpoint meta preview", expanded=False):
         try:
