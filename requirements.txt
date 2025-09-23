@@ -1,19 +1,19 @@
-torch
-torchvision
-torchaudio
+# Use CPU-only PyTorch wheels from the official index
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.2.2+cpu
+torchvision==0.17.2+cpu
+torchaudio==2.2.2+cpu
 torchmetrics
 torchcam
 captum
-pytorch-lightning
+# Lightning (pytorch-lightning older alias still works but this is preferred)
+lightning
 albumentations
-opencv-python
+# Headless OpenCV for servers without GUI
+opencv-python-headless
 matplotlib
 seaborn
 tensorboard
 rich
-pre-commit
-black
-isort
-flake8
 PyYAML
 streamlit
