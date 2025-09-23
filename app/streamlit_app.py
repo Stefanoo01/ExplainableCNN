@@ -274,7 +274,8 @@ st.title("🔍 Grad-CAM Demo — upload an image, get top-k + heatmaps")
 with st.sidebar:
     st.header("Settings")
 
-    source = st.radio("Checkpoint source", ["Local folder", "Remote URL/Presets"], index=0)
+    # Prioritize online usage: default to remote presets/URL; optional local folder for devs
+    source = st.radio("Checkpoint source", ["Remote URL/Presets", "Local folder"], index=0)
 
     ckpt_path = st.session_state.get("ckpt_path")
 
@@ -310,6 +311,26 @@ with st.sidebar:
                     st.cache_data.clear()
                 except Exception as e:
                     st.error(f"Download failed: {e}")
+
+        st.markdown("Upload your own .ckpt (trained locally)")
+        uploaded_ckpt = st.file_uploader("Upload checkpoint file", type=["ckpt"], accept_multiple_files=False)
+        if uploaded_ckpt is not None and st.button("Save uploaded checkpoint", use_container_width=True):
+            try:
+                Path(dest_dir).mkdir(parents=True, exist_ok=True)
+                raw = uploaded_ckpt.read()
+                content_hash = hashlib.sha256(raw).hexdigest()[:16]
+                base_name = Path(uploaded_ckpt.name).name
+                if not base_name.endswith(".ckpt"):
+                    base_name = f"{base_name}.ckpt"
+                local_path = Path(dest_dir) / f"{content_hash}_{base_name}"
+                with open(local_path, "wb") as f:
+                    f.write(raw)
+                ckpt_path = str(local_path)
+                st.session_state["ckpt_path"] = ckpt_path
+                st.success(f"Uploaded to: {ckpt_path}")
+                st.cache_data.clear()
+            except Exception as e:
+                st.error(f"Upload failed: {e}")
 
     st.caption(f"Selected: {ckpt_path}")
 
