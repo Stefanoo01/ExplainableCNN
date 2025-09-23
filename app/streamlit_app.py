@@ -22,10 +22,6 @@ from torchvision.datasets import CIFAR10, MNIST, FashionMNIST
 if "ckpt_path" not in st.session_state:
     st.session_state["ckpt_path"] = None
 
-# Persist sample picker index across reruns
-if "sample_idx_pos" not in st.session_state:
-    st.session_state["sample_idx_pos"] = 0
-
 
 @st.cache_data(show_spinner=True)
 def download_release_asset(url: str, dest_dir: str = "saved_checkpoints") -> str:
@@ -381,7 +377,6 @@ with st.sidebar:
         except Exception as e:
             st.info(f"Could not read meta: {e}")
 
-    device_choice = st.selectbox("Device", ["auto", "cuda", "cpu"], index=0)
     method = st.selectbox("CAM method", ["Grad-CAM", "Grad-CAM++"], index=0)
     topk = st.slider("Top-k classes", min_value=1, max_value=10, value=3, step=1)
     alpha = st.slider(
@@ -399,7 +394,7 @@ if not ckpt_path or not Path(ckpt_path).exists():
     )
     st.stop()
 
-device = get_device(device_choice)
+device = "cpu"
 model, classes, meta = load_model_from_ckpt(Path(ckpt_path), device)
 tf = build_transform_from_meta(meta)
 target_layer = meta.get("default_target_layer", "conv2")
@@ -412,16 +407,13 @@ uploaded = st.file_uploader(
 )
 
 with st.expander("…or pick a sample from this model's dataset", expanded=False):
-    # Lock to the dataset the model was trained on
     ds_default = meta.get("dataset", "fashion-mnist")
     ds, ds_classes = load_raw_dataset(ds_default, root="data")
-
-    # Targets for filtering
     targets = np.array(getattr(ds, "targets", [ds[i][1] for i in range(len(ds))]))
 
-    # Class filter (optional)
+    # --- class filter (persisted) ---
     class_opts = ["(any)"] + list(ds_classes)
-    class_sel = st.selectbox("Class filter", options=class_opts, index=0, key="class_filter")
+    class_sel = st.selectbox("Class filter", options=class_opts, index=0, key="class_sel")
 
     if class_sel == "(any)":
         filtered_idx = np.arange(len(ds))
@@ -429,44 +421,51 @@ with st.expander("…or pick a sample from this model's dataset", expanded=False
         class_id = ds_classes.index(class_sel)
         filtered_idx = np.nonzero(targets == class_id)[0]
 
-    # Index picker within the filtered subset
+    # --- ensure we have a session index and keep it valid ---
+    if "sample_idx" not in st.session_state:
+        st.session_state["sample_idx"] = 0
+
+    # clamp when filter changes or dataset length is small
+    if len(filtered_idx) > 0:
+        st.session_state["sample_idx"] = int(
+            np.clip(st.session_state["sample_idx"], 0, len(filtered_idx) - 1)
+        )
+
     if len(filtered_idx) == 0:
         st.info("No samples found for this class.")
         sample_img = None
     else:
-        # Ensure the stored index is valid for the current filtered set
-        max_pos = max(0, len(filtered_idx) - 1)
-        if st.session_state.get("sample_idx_pos", 0) > max_pos:
-            st.session_state["sample_idx_pos"] = max_pos
-
         col_l, col_r = st.columns([2, 1])
-        with col_l:
-            idx_pos = st.slider(
-                "Pick index (within filtered samples)",
-                0,
-                max_pos,
-                st.session_state.get("sample_idx_pos", 0),
-                key="sample_idx_pos",
-            )
-        with col_r:
-            if st.button("Pick random", key="btn_pick_random"):
-                st.session_state["sample_idx_pos"] = random.randrange(len(filtered_idx))
-                try:
-                    st.rerun()
-                except Exception:
-                    st.experimental_rerun()
 
-        raw_idx = int(filtered_idx[st.session_state.get("sample_idx_pos", idx_pos)])
+        with col_r:
+            picked = st.button("Pick random", use_container_width=True, key="btn_pick_random")
+            if picked:
+                # IMPORTANT: update session_state BEFORE creating the slider
+                cur = st.session_state["sample_idx"]
+                if len(filtered_idx) > 1:
+                    new_idx = random.randrange(len(filtered_idx) - 1)
+                    if new_idx >= cur:
+                        new_idx += 1
+                else:
+                    new_idx = 0
+                st.session_state["sample_idx"] = new_idx
+                # no st.rerun() needed; the app will rerun after the button
+
+        with col_l:
+            # Now instantiate the slider (AFTER any state changes above)
+            st.slider(
+                "Pick index (within filtered samples)",
+                0, max(0, len(filtered_idx) - 1),
+                key="sample_idx",  # same key as the state we set above
+            )
+
+        raw_idx = int(filtered_idx[st.session_state["sample_idx"]])
         img_tensor, label = ds[raw_idx]
         sample_img = pil_from_tensor(img_tensor, grayscale_to_rgb=True)
 
-        # SMALL preview (set width)
-        caption = (
-            f"Sample • {ds_default} • " f"class={ds_classes[label]} • " f"idx={raw_idx}"
-        )
         st.image(
             sample_img,
-            caption=caption,
+            caption=f"Sample • {ds_default} • class={ds_classes[label]} • idx={raw_idx}",
             width=160,
             use_container_width=False,
         )
