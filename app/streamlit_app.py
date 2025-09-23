@@ -22,6 +22,10 @@ from torchvision.datasets import CIFAR10, MNIST, FashionMNIST
 if "ckpt_path" not in st.session_state:
     st.session_state["ckpt_path"] = None
 
+# Persist sample picker index across reruns
+if "sample_idx_pos" not in st.session_state:
+    st.session_state["sample_idx_pos"] = 0
+
 
 @st.cache_data(show_spinner=True)
 def download_release_asset(url: str, dest_dir: str = "saved_checkpoints") -> str:
@@ -417,7 +421,7 @@ with st.expander("…or pick a sample from this model's dataset", expanded=False
 
     # Class filter (optional)
     class_opts = ["(any)"] + list(ds_classes)
-    class_sel = st.selectbox("Class filter", options=class_opts, index=0)
+    class_sel = st.selectbox("Class filter", options=class_opts, index=0, key="class_filter")
 
     if class_sel == "(any)":
         filtered_idx = np.arange(len(ds))
@@ -430,19 +434,29 @@ with st.expander("…or pick a sample from this model's dataset", expanded=False
         st.info("No samples found for this class.")
         sample_img = None
     else:
+        # Ensure the stored index is valid for the current filtered set
+        max_pos = max(0, len(filtered_idx) - 1)
+        if st.session_state.get("sample_idx_pos", 0) > max_pos:
+            st.session_state["sample_idx_pos"] = max_pos
+
         col_l, col_r = st.columns([2, 1])
         with col_l:
             idx_pos = st.slider(
                 "Pick index (within filtered samples)",
                 0,
-                max(0, len(filtered_idx) - 1),
-                0,
+                max_pos,
+                st.session_state.get("sample_idx_pos", 0),
+                key="sample_idx_pos",
             )
         with col_r:
-            if st.button("Pick random"):
-                idx_pos = random.randrange(len(filtered_idx))
+            if st.button("Pick random", key="btn_pick_random"):
+                st.session_state["sample_idx_pos"] = random.randrange(len(filtered_idx))
+                try:
+                    st.rerun()
+                except Exception:
+                    st.experimental_rerun()
 
-        raw_idx = int(filtered_idx[idx_pos])
+        raw_idx = int(filtered_idx[st.session_state.get("sample_idx_pos", idx_pos)])
         img_tensor, label = ds[raw_idx]
         sample_img = pil_from_tensor(img_tensor, grayscale_to_rgb=True)
 
