@@ -1,0 +1,7 @@
+{
+    "release_checkpoints": {
+        "resnet18_cifar10": "https://github.com/Stefanoo01/ExplainableCNN/releases/download/v1.0.0/resnet18_cifar10.ckpt",
+        "smallcnn_fmnist": "https://github.com/Stefanoo01/ExplainableCNN/releases/download/v1.0.0/smallcnn_fmnist.ckpt",
+        "smallcnn_aug_fmnist": "https://github.com/Stefanoo01/ExplainableCNN/releases/download/v1.0.0/smallcnn_aug_fmnist.ckpt"
+    }
+  }

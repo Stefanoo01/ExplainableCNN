@@ -4,6 +4,7 @@ from pathlib import Path
 import os
 import hashlib
 import requests
+import json
 
 import numpy as np
 import streamlit as st
@@ -42,6 +43,47 @@ def download_release_asset(url: str, dest_dir: str = "saved_checkpoints") -> str
                 if chunk:
                     f.write(chunk)
     return str(local_path)
+
+
+def load_release_presets() -> dict:
+    """Load release preset URLs from multiple sources.
+    Order: Streamlit secrets → .streamlit/presets.json → presets.json → env var RELEASE_CKPTS_JSON.
+    Returns a dict name -> url. Safe if nothing is configured.
+    """
+    # 1) Streamlit secrets
+    try:
+        if hasattr(st, "secrets") and "release_checkpoints" in st.secrets:
+            # Convert to plain dict in case it's a Secrets object
+            return dict(st.secrets["release_checkpoints"])  # type: ignore[index]
+    except Exception:
+        pass
+
+    # 2) Local JSON files for dev
+    for rel in (".streamlit/presets.json", "presets.json"):
+        p = Path(rel)
+        if p.exists():
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                # Either the file is a mapping directly, or has a top-level key
+                if isinstance(data, dict) and data:
+                    if "release_checkpoints" in data and isinstance(data["release_checkpoints"], dict):
+                        return dict(data["release_checkpoints"])  # nested
+                    return dict(data)  # flat mapping
+            except Exception:
+                pass
+
+    # 3) Environment variable containing JSON mapping
+    env_json = os.environ.get("RELEASE_CKPTS_JSON", "").strip()
+    if env_json:
+        try:
+            data = json.loads(env_json)
+            if isinstance(data, dict):
+                return dict(data)
+        except Exception:
+            pass
+
+    return {}
 
 
 # ---------- Small utilities ----------
@@ -274,63 +316,47 @@ st.title("🔍 Grad-CAM Demo — upload an image, get top-k + heatmaps")
 with st.sidebar:
     st.header("Settings")
 
-    # Prioritize online usage: default to remote presets/URL; optional local folder for devs
-    source = st.radio("Checkpoint source", ["Remote URL/Presets", "Local folder"], index=0)
-
     ckpt_path = st.session_state.get("ckpt_path")
 
-    if source == "Local folder":
-        ckpt_root = st.text_input("Checkpoint folder", value="saved_checkpoints")
-        if st.button("Refresh list", use_container_width=True):
-            st.cache_data.clear()
-        labels, paths = list_ckpts(ckpt_root, recursive=True)
-        if not paths:
-            st.warning(f"No matching checkpoints found under: {ckpt_root}")
+    st.subheader("Checkpoints")
+    # Remote download (presets or URL), saved automatically to saved_checkpoints/
+    presets = load_release_presets()
+    preset_names = list(presets.keys())
+    preset_sel = st.selectbox("Preset (GitHub Releases)", options=["(none)"] + preset_names, index=0) if preset_names else "(none)"
+    url_input = st.text_input("Or paste asset URL", value="")
+    if st.button("Download checkpoint", use_container_width=True):
+        url = presets.get(preset_sel, "") if preset_sel != "(none)" else url_input.strip()
+        if not url:
+            st.warning("Provide a preset or paste a URL")
         else:
-            sel_label = st.selectbox("Select a checkpoint", options=labels, index=0)
-            ckpt_path = paths[labels.index(sel_label)]
-            st.session_state["ckpt_path"] = ckpt_path
-    else:
-        st.subheader("Remote checkpoints (GitHub Releases)")
-        dest_dir = st.text_input("Download to folder", value="saved_checkpoints")
-
-        presets = st.secrets.get("release_checkpoints", {}) if hasattr(st, "secrets") else {}
-        preset_names = list(presets.keys())
-        preset_sel = st.selectbox("Preset release asset", options=["(none)"] + preset_names, index=0) if preset_names else "(none)"
-        url_input = st.text_input("Or paste asset URL", value="")
-        if st.button("Download checkpoint", use_container_width=True):
-            url = presets.get(preset_sel, "") if preset_sel != "(none)" else url_input.strip()
-            if not url:
-                st.warning("Provide a preset or paste a URL")
-            else:
-                try:
-                    path_dl = download_release_asset(url, dest_dir=dest_dir)
-                    st.success(f"Downloaded to: {path_dl}")
-                    ckpt_path = path_dl
-                    st.session_state["ckpt_path"] = ckpt_path
-                    st.cache_data.clear()
-                except Exception as e:
-                    st.error(f"Download failed: {e}")
-
-        st.markdown("Upload your own .ckpt (trained locally)")
-        uploaded_ckpt = st.file_uploader("Upload checkpoint file", type=["ckpt"], accept_multiple_files=False)
-        if uploaded_ckpt is not None and st.button("Save uploaded checkpoint", use_container_width=True):
             try:
-                Path(dest_dir).mkdir(parents=True, exist_ok=True)
-                raw = uploaded_ckpt.read()
-                content_hash = hashlib.sha256(raw).hexdigest()[:16]
-                base_name = Path(uploaded_ckpt.name).name
-                if not base_name.endswith(".ckpt"):
-                    base_name = f"{base_name}.ckpt"
-                local_path = Path(dest_dir) / f"{content_hash}_{base_name}"
-                with open(local_path, "wb") as f:
-                    f.write(raw)
-                ckpt_path = str(local_path)
+                path_dl = download_release_asset(url, dest_dir="saved_checkpoints")
+                st.success(f"Downloaded to: {path_dl}")
+                ckpt_path = path_dl
                 st.session_state["ckpt_path"] = ckpt_path
-                st.success(f"Uploaded to: {ckpt_path}")
                 st.cache_data.clear()
             except Exception as e:
-                st.error(f"Upload failed: {e}")
+                st.error(f"Download failed: {e}")
+
+    # Upload a user-provided .ckpt directly in the online app
+    uploaded_ckpt = st.file_uploader("Upload checkpoint (.ckpt)", type=["ckpt"], accept_multiple_files=False)
+    if uploaded_ckpt is not None and st.button("Use uploaded checkpoint", use_container_width=True):
+        try:
+            Path("saved_checkpoints").mkdir(parents=True, exist_ok=True)
+            raw = uploaded_ckpt.read()
+            content_hash = hashlib.sha256(raw).hexdigest()[:16]
+            base_name = Path(uploaded_ckpt.name).name
+            if not base_name.endswith(".ckpt"):
+                base_name = f"{base_name}.ckpt"
+            local_path = Path("saved_checkpoints") / f"{content_hash}_{base_name}"
+            with open(local_path, "wb") as f:
+                f.write(raw)
+            ckpt_path = str(local_path)
+            st.session_state["ckpt_path"] = ckpt_path
+            st.success(f"Uploaded to: {ckpt_path}")
+            st.cache_data.clear()
+        except Exception as e:
+            st.error(f"Upload failed: {e}")
 
     st.caption(f"Selected: {ckpt_path}")
 
