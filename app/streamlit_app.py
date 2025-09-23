@@ -17,6 +17,32 @@ from torchcam.methods import GradCAM, GradCAMpp
 from torchcam.utils import overlay_mask
 from torchvision.datasets import CIFAR10, MNIST, FashionMNIST
 
+# Persist selected checkpoint across reruns
+if "ckpt_path" not in st.session_state:
+    st.session_state["ckpt_path"] = None
+
+
+@st.cache_data(show_spinner=True)
+def download_release_asset(url: str, dest_dir: str = "saved_checkpoints") -> str:
+    """Download a remote checkpoint to dest_dir and return its local path.
+    Cached so subsequent reruns won't redownload.
+    """
+    Path(dest_dir).mkdir(parents=True, exist_ok=True)
+    url_hash = hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
+    fname = Path(url).name or f"asset_{url_hash}.ckpt"
+    if not fname.endswith(".ckpt"):
+        fname = f"{fname}.ckpt"
+    local_path = Path(dest_dir) / f"{url_hash}_{fname}"
+    if local_path.exists() and local_path.stat().st_size > 0:
+        return str(local_path)
+    with requests.get(url, stream=True, timeout=120) as r:
+        r.raise_for_status()
+        with open(local_path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    f.write(chunk)
+    return str(local_path)
+
 
 # ---------- Small utilities ----------
 def get_device(choice="auto"):
@@ -249,41 +275,23 @@ with st.sidebar:
     st.header("Settings")
 
     source = st.radio("Checkpoint source", ["Local folder", "Remote URL/Presets"], index=0)
-    show_best_only = st.checkbox("Only show best.ckpt", value=False)
-    filter = "best" if show_best_only else ""
 
-    ckpt_path = None
+    ckpt_path = st.session_state.get("ckpt_path")
 
     if source == "Local folder":
         ckpt_root = st.text_input("Checkpoint folder", value="saved_checkpoints")
         if st.button("Refresh list", use_container_width=True):
             st.cache_data.clear()
-        labels, paths = list_ckpts(ckpt_root, recursive=True, filter=filter)
+        labels, paths = list_ckpts(ckpt_root, recursive=True)
         if not paths:
             st.warning(f"No matching checkpoints found under: {ckpt_root}")
         else:
             sel_label = st.selectbox("Select a checkpoint", options=labels, index=0)
             ckpt_path = paths[labels.index(sel_label)]
+            st.session_state["ckpt_path"] = ckpt_path
     else:
         st.subheader("Remote checkpoints (GitHub Releases)")
         dest_dir = st.text_input("Download to folder", value="saved_checkpoints")
-
-        def download_release_asset(url: str, dest_dir: str = "saved_checkpoints") -> str:
-            Path(dest_dir).mkdir(parents=True, exist_ok=True)
-            url_hash = hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
-            fname = Path(url).name or f"asset_{url_hash}.ckpt"
-            if not fname.endswith(".ckpt"):
-                fname = f"{fname}.ckpt"
-            local_path = Path(dest_dir) / f"{url_hash}_{fname}"
-            if local_path.exists() and local_path.stat().st_size > 0:
-                return str(local_path)
-            with requests.get(url, stream=True, timeout=120) as r:
-                r.raise_for_status()
-                with open(local_path, "wb") as f:
-                    for chunk in r.iter_content(chunk_size=1024 * 1024):
-                        if chunk:
-                            f.write(chunk)
-            return str(local_path)
 
         presets = st.secrets.get("release_checkpoints", {}) if hasattr(st, "secrets") else {}
         preset_names = list(presets.keys())
@@ -298,6 +306,7 @@ with st.sidebar:
                     path_dl = download_release_asset(url, dest_dir=dest_dir)
                     st.success(f"Downloaded to: {path_dl}")
                     ckpt_path = path_dl
+                    st.session_state["ckpt_path"] = ckpt_path
                     st.cache_data.clear()
                 except Exception as e:
                     st.error(f"Download failed: {e}")
