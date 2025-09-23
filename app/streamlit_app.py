@@ -259,9 +259,14 @@ with st.sidebar:
 
     if not paths:
         st.warning(f"No matching checkpoints found under: {ckpt_root}")
+        no_paths = True
 
-    sel_label = st.selectbox("Select a checkpoint", options=labels, index=0)
-    ckpt_path = paths[labels.index(sel_label)]
+    if not no_paths:
+        sel_label = st.selectbox("Select a checkpoint", options=labels, index=0)
+        ckpt_path = paths[labels.index(sel_label)]
+    else:
+        ckpt_path = None
+
     st.caption(f"Selected: {ckpt_path}")
 
     st.markdown("---")
