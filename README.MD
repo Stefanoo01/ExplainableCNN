@@ -1,3 +1,9 @@
+---
+title: ExplainableCNN
+app_file: app/gradio_app.py
+sdk: gradio
+sdk_version: 5.47.0
+---
 # ExplainableCNN
 
 End‑to‑end image classification with explainability. Train CNNs on common vision datasets, save checkpoints and metrics, and visualize Grad‑CAM/Grad‑CAM++ heatmaps in a Streamlit app.

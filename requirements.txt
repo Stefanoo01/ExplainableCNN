@@ -18,3 +18,4 @@ rich
 PyYAML
 streamlit
 requests
+gradio
