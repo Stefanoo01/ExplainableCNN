@@ -592,13 +592,51 @@ def create_interface():
             with gr.Column(scale=2):
                 gr.Markdown("## Image Input")
 
-                size_alert = gr.Markdown(
-                    value="""
-                <div class="alert">
-                ⚠️ Image was resized for better visualization — not equal to the dataset’s original size.
-                </div>
-                """,
-                    elem_id="size-alert"
+                gr.HTML(
+                    """
+                    <style>
+                    .close-toggle {
+                        /* Hide the checkbox itself */
+                        position: absolute;
+                        opacity: 0;
+                        pointer-events: none;
+                    }
+
+                    /* When checked, hide the alert */
+                    .close-toggle:checked + .alert {
+                        display: none;
+                    }
+
+                    .alert {
+                        position: relative;
+                        padding: 12px 40px 12px 12px;
+                        background: #fff3cd;   /* pale yellow */
+                        color: #664d03;
+                        border: 1px solid #ffe69c;
+                        border-radius: 8px;
+                        font-family: system-ui, sans-serif;
+                    }
+
+                    .alert .close {
+                        position: absolute;
+                        top: 6px;
+                        right: 10px;
+                        font-size: 20px;
+                        font-weight: bold;
+                        color: #664d03;
+                        cursor: pointer;
+                        user-select: none;
+                        text-decoration: none;
+                    }
+                    </style>
+
+                    <input id="alert-close-1" class="close-toggle" type="checkbox">
+
+                    <div class="alert">
+                    <label for="alert-close-1" class="close" aria-label="Close alert">&times;</label>
+                    ⚠️ Image was resized for better visualization — not equal to dataset original size.
+                    </div>
+                    """
                 )
                 
                 with gr.Group():

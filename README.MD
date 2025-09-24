@@ -6,7 +6,7 @@ sdk_version: 5.47.0
 ---
 # ExplainableCNN
 
-End‑to‑end image classification with explainability. Train CNNs on common vision datasets, save checkpoints and metrics, and visualize Grad‑CAM/Grad‑CAM++ heatmaps in a Streamlit app.
+End‑to‑end image classification with explainability. Train CNNs on common vision datasets, save checkpoints and metrics, and visualize Grad‑CAM/Grad‑CAM++ heatmaps in a Streamlit or Gradio app.
 
 >**Online App**: You can try the app online at `https://explainable-cnn.streamlit.app`
 
@@ -37,6 +37,11 @@ python -m src.train --config configs/baseline.yaml
 3) Launch the Grad‑CAM demo and visualize predictions:
 ```bash
 streamlit run app/streamlit_app.py
+```
+
+Or run the Gradio app locally:
+```bash
+python app/gradio_app.py
 ```
 
 ## Installation
@@ -148,6 +153,17 @@ What it does
 - Upload an image or sample one from the corresponding dataset
 - Run inference and display top‑k predictions
 - Visualize Grad‑CAM or Grad‑CAM++ overlays with adjustable alpha
+
+## Gradio Grad‑CAM demo
+
+Start the Gradio app locally (no sharing by default):
+```bash
+python app/gradio_app.py
+```
+
+Notes
+- The `app/` directory is used only to start the app online (e.g., in hosted environments) and contains the Gradio entry `app/gradio_app.py`.
+- Presets, URL download, and checkpoint upload are supported similarly to the Streamlit app.
 
 Supplying checkpoints
 - Local discovery: put `.ckpt` files under `saved_checkpoints/` or use the file uploader
