@@ -300,8 +300,8 @@ def load_checkpoint_from_url(url, preset_name):
         max_samples = len(dataset) - 1 if app_state["dataset"] else 0
         
         return (f"✅ Loaded: {ckpt_path}", json.dumps(meta_info, indent=2), 
-                gr.update(visible=True), gr.update(choices=class_choices, value="(any)"),
-                gr.update(visible=True, maximum=max_samples, value=0))
+                gr.update(visible=True), gr.update(choices=class_choices, value="(any)", visible=True),
+                gr.update(visible=True, maximum=max_samples, value=0)), gr.update(visible=True, value="")
     
     except Exception as e:
         return f"❌ Failed: {str(e)}", "", gr.update(visible=False), gr.update(choices=["(any)"], value="(any)"), gr.update(visible=False), gr.update(choices=["(any)"], value="(any)"), gr.update(visible=False)
@@ -362,8 +362,8 @@ def load_checkpoint_from_file(file):
         max_samples = len(dataset) - 1 if app_state["dataset"] else 0
         
         return (f"✅ Loaded: {local_path}", json.dumps(meta_info, indent=2), 
-                gr.update(visible=True), gr.update(choices=class_choices, value="(any)"),
-                gr.update(visible=True, maximum=max_samples, value=0))
+                gr.update(visible=True), gr.update(choices=class_choices, value="(any)", visible=True),
+                gr.update(visible=True, maximum=max_samples, value=0)), gr.update(visible=True, value="")
     
     except Exception as e:
         return f"❌ Failed: {str(e)}", "", gr.update(visible=False)
