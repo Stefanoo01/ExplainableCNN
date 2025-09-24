@@ -1,14 +1,11 @@
 ---
 title: ExplainableCNN
-app_file: app/gradio_app.py
-sdk: gradio
-sdk_version: 5.47.0
 ---
 # ExplainableCNN
 
 End‑to‑end image classification with explainability. Train CNNs on common vision datasets, save checkpoints and metrics, and visualize Grad‑CAM/Grad‑CAM++ heatmaps in a Streamlit or Gradio app.
 
->**Online App**: You can try the app online at `https://explainable-cnn.streamlit.app`
+>**Online App**: You can try the app online at `https://huggingface.co/spaces/Stefano01/ExplainableCNN`
 
 Contents
 - Quick start
@@ -143,7 +140,7 @@ CLI flags can override the YAML. For example `--dataset`, `--epochs`, `--lr`, `-
 
 ## Streamlit Grad‑CAM demo
 
-Start the app (or try it online at `https://explainable-cnn.streamlit.app`)
+Start the app
 ```bash
 streamlit run app/streamlit_app.py
 ```
@@ -156,26 +153,14 @@ What it does
 
 ## Gradio Grad‑CAM demo
 
-Start the Gradio app locally (no sharing by default):
+Start the Gradio app locally (or try it online at `https://huggingface.co/spaces/Stefano01/ExplainableCNN`):
 ```bash
 python app/gradio_app.py
 ```
 
 Notes
-- The `app/` directory is used only to start the app online (e.g., in hosted environments) and contains the Gradio entry `app/gradio_app.py`.
+- The `app.py` file is used only to start the app online.
 - Presets, URL download, and checkpoint upload are supported similarly to the Streamlit app.
-
-Supplying checkpoints
-- Local discovery: put `.ckpt` files under `saved_checkpoints/` or use the file uploader
-- Download from a URL: paste a direct link to a `.ckpt` asset and click “Download checkpoint”
-- Presets: provide a map of names → URLs via one of:
-  - Streamlit secrets: `st.secrets["release_checkpoints"] = { "Name": "https://...best.ckpt" }`
-  - `.streamlit/presets.json` or `presets.json` in repo root, either:
-    ```json
-    { "release_checkpoints": { "FMNIST SmallCNN": "https://.../best.ckpt" } }
-    ```
-    or a flat mapping `{ "FMNIST SmallCNN": "https://..." }`
-  - Environment variable `RELEASE_CKPTS_JSON` with a JSON mapping string
 
 Devices and CAM methods
 - Device: `auto` (default), `cuda`, or `cpu`
