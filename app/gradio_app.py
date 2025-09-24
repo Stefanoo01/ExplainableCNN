@@ -32,7 +32,7 @@ app_state = {
 
 custom_theme = gr.themes.Soft(
     primary_hue="green",     # main brand color
-    secondary_hue="purple",  # accent color
+    secondary_hue="green",  # accent color
     neutral_hue="slate"       # backgrounds/borders/text neutrals
 )
 
@@ -301,7 +301,7 @@ def load_checkpoint_from_url(url, preset_name):
         
         return (f"✅ Loaded: {ckpt_path}", json.dumps(meta_info, indent=2), 
                 gr.update(visible=True), gr.update(choices=class_choices, value="(any)", visible=True),
-                gr.update(visible=True, maximum=max_samples, value=0)), gr.update(visible=True, value="")
+                gr.update(visible=True, maximum=max_samples, value=0), gr.update(visible=True, value=""))
     
     except Exception as e:
         return f"❌ Failed: {str(e)}", "", gr.update(visible=False), gr.update(choices=["(any)"], value="(any)"), gr.update(visible=False), gr.update(choices=["(any)"], value="(any)"), gr.update(visible=False)
@@ -363,28 +363,44 @@ def load_checkpoint_from_file(file):
         
         return (f"✅ Loaded: {local_path}", json.dumps(meta_info, indent=2), 
                 gr.update(visible=True), gr.update(choices=class_choices, value="(any)", visible=True),
-                gr.update(visible=True, maximum=max_samples, value=0)), gr.update(visible=True, value="")
+                gr.update(visible=True, maximum=max_samples, value=0), gr.update(visible=True, value=""))
     
     except Exception as e:
         return f"❌ Failed: {str(e)}", "", gr.update(visible=False)
 
 
-def get_random_sample():
-    """Get a random sample from the loaded dataset."""
+def get_random_sample(class_filter="(any)"):
+    """Get a random sample from the (optionally filtered) dataset."""
     if app_state["dataset"] is None:
         return None, "No dataset loaded", gr.update(visible=False)
-    
+
     dataset = app_state["dataset"]
-    idx = random.randint(0, len(dataset) - 1)
-    img_tensor, label = dataset[idx]
+    dataset_classes = app_state["dataset_classes"]
+
+    # Build candidate indices according to filter
+    if class_filter != "(any)":
+        targets = np.array([dataset[i][1] for i in range(len(dataset))])
+        class_id = dataset_classes.index(class_filter)
+        filtered_indices = np.where(targets == class_id)[0]
+        if len(filtered_indices) == 0:
+            return None, f"No samples found for class: {class_filter}", gr.update(visible=True, maximum=0, value=0)
+        actual_idx = int(random.choice(filtered_indices))
+        # slider index is relative to the filtered list length
+        slider_max = len(filtered_indices) - 1
+        slider_value = int(np.where(filtered_indices == actual_idx)[0][0])
+    else:
+        actual_idx = random.randint(0, len(dataset) - 1)
+        slider_max = len(dataset) - 1
+        slider_value = actual_idx
+
+    img_tensor, label = dataset[actual_idx]
     sample_img = pil_from_tensor(img_tensor, grayscale_to_rgb=True)
-    
-    class_name = app_state["dataset_classes"][label] if app_state["dataset_classes"] else str(label)
-    caption = f"Sample from {app_state['meta'].get('dataset', 'dataset')} • class: {class_name} • idx: {idx}"
-    
-    # Update slider maximum and current value
-    max_idx = len(dataset) - 1
-    return sample_img, caption, gr.update(visible=True, maximum=max_idx, value=idx)
+    sample_img = double_height(sample_img) 
+    class_name = dataset_classes[label] if dataset_classes else str(label)
+    caption = f"Sample {actual_idx} from {app_state['meta'].get('dataset', 'dataset')} • class: {class_name}"
+
+    # Update slider to the picked index inside the current filter's range
+    return sample_img, caption, gr.update(visible=True, maximum=slider_max, value=slider_value)
 
 
 def get_sample_by_index(idx, class_filter):
@@ -414,7 +430,7 @@ def get_sample_by_index(idx, class_filter):
     
     img_tensor, label = dataset[actual_idx]
     sample_img = pil_from_tensor(img_tensor, grayscale_to_rgb=True)
-    
+    sample_img = double_height(sample_img)
     class_name = dataset_classes[label] if dataset_classes else str(label)
     caption = f"Sample {actual_idx} from {app_state['meta'].get('dataset', 'dataset')} • class: {class_name}"
     
@@ -438,6 +454,12 @@ def update_class_filter(class_filter):
         max_idx = len(filtered_indices) - 1 if len(filtered_indices) > 0 else 0
     
     return gr.update(visible=True, maximum=max_idx, value=0)
+
+
+def double_height(img: Image.Image) -> Image.Image:
+    """Return a copy of the image with doubled height."""
+    w, h = img.size
+    return img.resize((w * 10, h * 10), Image.Resampling.NEAREST)
 
 
 def process_image(image, method, topk, alpha):
@@ -501,7 +523,17 @@ def create_interface():
     presets = load_release_presets()
     preset_choices = ["None"] + list(presets.keys()) if presets else ["None"]
     
-    with gr.Blocks(title="🔍 Grad-CAM Demo", theme=custom_theme) as demo:
+    with gr.Blocks(css="""
+    .alert {
+    padding: 10px 15px;
+    background-color: #FFF3CD;
+    color: #856404;
+    border: 1px solid #FFEEBA;
+    border-radius: 6px;
+    position: relative;
+    text-color: #856404;
+    }
+    """, theme=custom_theme) as demo:
         gr.Markdown("# 🔍 Grad-CAM Demo — Upload an image, get top-k predictions + heatmaps")
         
         with gr.Row():
@@ -559,11 +591,22 @@ def create_interface():
             
             with gr.Column(scale=2):
                 gr.Markdown("## Image Input")
+
+                size_alert = gr.Markdown(
+                    value="""
+                <div class="alert">
+                ⚠️ Image was resized for better visualization — not equal to the dataset’s original size.
+                </div>
+                """,
+                    elem_id="size-alert"
+                )
                 
                 with gr.Group():
+
                     image_input = gr.Image(
                         label="Upload Image",
-                        type="pil"
+                        type="pil",
+                        height=400,
                     )
                     
                     with gr.Row():
@@ -615,7 +658,6 @@ def create_interface():
                         show_label=False,
                         elem_id="gallery",
                         columns=3,
-                        rows=2,
                         object_fit="contain",
                         height="auto"
                     )
@@ -624,17 +666,18 @@ def create_interface():
         url_button.click(
             fn=load_checkpoint_from_url,
             inputs=[url_input, preset_dropdown],
-            outputs=[status_text, meta_display, sample_button, class_filter, sample_slider]
+            outputs=[status_text, meta_display, sample_button, class_filter, sample_slider, sample_info]
         )
         
         file_button.click(
             fn=load_checkpoint_from_file,
             inputs=[file_input],
-            outputs=[status_text, meta_display, sample_button, class_filter, sample_slider]
+            outputs=[status_text, meta_display, sample_button, class_filter, sample_slider, sample_info]
         )
         
         sample_button.click(
             fn=get_random_sample,
+            inputs=[class_filter],
             outputs=[image_input, sample_info, sample_slider]
         )
         
